@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phishing &amp; Scam Detector</title>
+<style>
+  :root {
+    --bg: #eef2f5; --panel: #ffffff; --ink: #14202b; --muted: #5b6b79; --line: #d5dde4;
+    --low: #1f7a5a; --medium: #a8660b; --high: #b8322a;
+    --low-bg: #dff1ea; --medium-bg: #f8e8cf; --high-bg: #f7dcd9; --focus: #1c5fa8;
+    --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10181f; --panel: #17222c; --ink: #e6edf3; --muted: #93a4b3; --line: #2a3945;
+      --low: #5fd0a3; --medium: #f0b45a; --high: #ff8a80;
+      --low-bg: #173b30; --medium-bg: #3d2f16; --high-bg: #43201f; --focus: #7db8f2;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font); }
+  main { max-width: 1060px; margin: 0 auto; padding: 32px 20px 56px; }
+  h1 { font-size: 1.75rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); margin: 0 0 24px; max-width: 62ch; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  h2 { font-size: 1rem; margin: 0 0 10px; }
+  textarea {
+    width: 100%; min-height: 220px; resize: vertical; padding: 12px; font: inherit;
+    color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  }
+  textarea:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; padding: 9px 14px;
+    border: 1px solid var(--line); background: transparent; color: var(--ink);
+  }
+  button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+  button:disabled { opacity: .55; cursor: progress; }
+  .empty { color: var(--muted); margin: 0; }
+  .error { color: var(--high); margin: 8px 0 0; }
+  .verdict { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; }
+  .score { font-size: 3rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .label { font-weight: 600; }
+  .meter { height: 10px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; margin-bottom: 18px; }
+  .meter > div { height: 100%; width: 0; transition: width .35s ease; }
+  @media (prefers-reduced-motion: reduce) { .meter > div { transition: none; } }
+  .low { color: var(--low); } .medium { color: var(--medium); } .high { color: var(--high); }
+  .meter .low { background: var(--low); } .meter .medium { background: var(--medium); } .meter .high { background: var(--high); }
+  .annotated {
+    white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px; margin: 0 0 18px; font-family: var(--mono); font-size: .9rem; line-height: 1.6;
+  }
+  mark { color: inherit; border-radius: 3px; padding: 1px 2px; }
+  mark.low { background: var(--low-bg); } mark.medium { background: var(--medium-bg); } mark.high { background: var(--high-bg); }
+  ul.items { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 8px; }
+  ul.items li { border-left: 4px solid var(--line); padding: 6px 10px; background: var(--bg); border-radius: 0 6px 6px 0; }
+  ul.items li.low { border-color: var(--low); } ul.items li.medium { border-color: var(--medium); } ul.items li.high { border-color: var(--high); }
+  ul.items li.none { border-color: var(--line); }
+  .sev { font-size: .8rem; color: var(--muted); }
+  .url { font-family: var(--mono); font-size: .85rem; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: .85rem; margin: 0; }
+  .note { color: var(--muted); font-size: .85rem; margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Phishing &amp; scam detector</h1>
+  <p class="lede">Paste a message, email or link. You get a risk score and the exact phrases and link features behind it. Links are inspected as text and never opened.</p>
+
+  <div class="grid">
+    <section aria-labelledby="in-h">
+      <h2 id="in-h">Message or link</h2>
+      <textarea id="input" maxlength="10000" placeholder="Paste a suspicious SMS, email or URL here"></textarea>
+      <div class="row">
+        <button class="primary" id="go">Check for risk</button>
+        <button id="ex-bad" type="button">Load scam example</button>
+        <button id="ex-good" type="button">Load safe example</button>
+      </div>
+      <p class="error" id="err" role="alert"></p>
+    </section>
+
+    <section aria-labelledby="out-h" aria-live="polite">
+      <h2 id="out-h">Result</h2>
+      <p class="empty" id="empty">Nothing checked yet. Paste text and choose Check for risk.</p>
+      <div id="result" hidden>
+        <div class="verdict"><span class="score" id="score"></span><span class="label" id="verdict"></span></div>
+        <div class="meter" aria-hidden="true"><div id="bar"></div></div>
+        <h2>Message with flagged parts</h2>
+        <div class="annotated" id="annotated"></div>
+        <h2>Why</h2>
+        <ul class="items" id="findings"></ul>
+        <h2>Links</h2>
+        <ul class="items" id="urls"></ul>
+        <p class="meta" id="meta"></p>
+      </div>
+    </section>
+  </div>
+  <p class="note">This is a screening aid trained on a small synthetic dataset. Treat the result as a second opinion, not a guarantee. When in doubt, contact the sender through an official channel.</p>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const LABELS = { low: "Looks safe", medium: "Suspicious", high: "Likely phishing or scam" };
+const EXAMPLES = {
+  bad: "Dear customer, your SBI account will be suspended within 24 hours. Complete KYC immediately: http://sbi-kyc-update.xyz/login and share your OTP to avoid blocking.",
+  good: "Hi team, the sprint review is scheduled for tomorrow at 11 am. Please update your tickets before the meeting.",
+};
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+function renderAnnotated(text, data) {
+  const spans = [];
+  data.findings.forEach((f) => f.spans.forEach((s) => spans.push({ ...s, sev: f.severity })));
+  data.urls.forEach((u) => { if (u.severity !== "none") spans.push({ ...u.span, sev: u.severity }); });
+  spans.sort((a, b) => a.start - b.start || b.end - a.end);
+  const box = $("annotated");
+  box.replaceChildren();
+  let pos = 0;
+  for (const s of spans) {
+    if (s.start < pos) continue;           // skip overlaps
+    if (s.start > pos) box.append(text.slice(pos, s.start));
+    box.append(el("mark", s.sev, text.slice(s.start, s.end)));
+    pos = s.end;
+  }
+  box.append(text.slice(pos));
+}
+
+function render(text, data) {
+  $("empty").hidden = true;
+  $("result").hidden = false;
+  const sev = data.verdict;
+  $("score").textContent = data.risk_score;
+  $("score").className = "score " + sev;
+  $("verdict").textContent = LABELS[sev];
+  $("verdict").className = "label " + sev;
+  const bar = $("bar");
+  bar.className = sev;
+  bar.style.width = data.risk_score + "%";
+
+  renderAnnotated(text, data);
+
+  const fl = $("findings");
+  fl.replaceChildren();
+  if (!data.findings.length) fl.append(el("li", "none", "No scam phrases found."));
+  data.findings.forEach((f) => {
+    const li = el("li", f.severity);
+    li.append(el("div", "", f.detail));
+    if (f.evidence) li.append(el("div", "sev", "Matched: \u201c" + f.evidence + "\u201d \u00b7 " + f.severity + " severity"));
+    fl.append(li);
+  });
+
+  const ul = $("urls");
+  ul.replaceChildren();
+  if (!data.urls.length) ul.append(el("li", "none", "No links in this text."));
+  data.urls.forEach((u) => {
+    const li = el("li", u.severity);
+    li.append(el("div", "url", u.url));
+    if (!u.flags.length) li.append(el("div", "sev", "No red flags in the link itself."));
+    u.flags.forEach((t) => li.append(el("div", "sev", t)));
+    ul.append(li);
+  });
+
+  const ml = data.ml_probability === null ? "not used (link only)" : Math.round(data.ml_probability * 100) + "%";
+  $("meta").textContent = "Model estimate: " + ml + " \u00b7 Rule score: " + Math.round(data.rule_score * 100) + "%";
+}
+
+async function check() {
+  const text = $("input").value;
+  $("err").textContent = "";
+  if (!text.trim()) { $("err").textContent = "Paste a message or link first."; return; }
+  const btn = $("go");
+  btn.disabled = true; btn.textContent = "Checking\u2026";
+  try {
+    const res = await fetch("/api/analyze", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error("Server returned " + res.status);
+    render(text, await res.json());
+  } catch (e) {
+    $("err").textContent = "Could not check this text. " + e.message + ". Is the server running?";
+  } finally {
+    btn.disabled = false; btn.textContent = "Check for risk";
+  }
+}
+
+$("go").addEventListener("click", check);
+$("ex-bad").addEventListener("click", () => { $("input").value = EXAMPLES.bad; check(); });
+$("ex-good").addEventListener("click", () => { $("input").value = EXAMPLES.good; check(); });
+</script>
+</body>
+</html>
